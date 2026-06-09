@@ -32,7 +32,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Elderly Cards */}
-        <Text style={styles.sectionTitle}>Your loved ones</Text>
+        <Text style={styles.sectionTitle}>Your patients</Text>
         {MOCK_ELDERLY.map(profile => (
           <ElderlyCard
             key={profile.id}

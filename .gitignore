@@ -42,3 +42,7 @@ yarn-error.*
 
 # excluded files
 June-Aug.md
+
+# ai
+.claude
+
