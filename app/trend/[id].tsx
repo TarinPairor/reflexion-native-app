@@ -2,17 +2,18 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Dimensions,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
-import { MOCK_ELDERLY, MOCK_TRENDS, getElderlyStatus } from '../../src/data/mockData';
-import type { TrendDay, Status } from '../../src/data/mockData';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { MOCK_ELDERLY, MOCK_TRENDS } from '../../src/data/mockData';
+import type { TrendDay } from '../../src/data/mockData';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const BAR_COLOR: Record<Status, string> = { green: '#2ECC71', yellow: '#F1C40F', red: '#E74C3C' };
 
 type Range = 7 | 30 | 90;
 
 export default function TrendScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [range, setRange] = useState<Range>(30);
 
   const profile = MOCK_ELDERLY.find(e => e.id === id);
@@ -26,12 +27,13 @@ export default function TrendScreen() {
     : 0;
 
   const summaryText = (() => {
-    if (talkedDays >= range * 0.85) return `${profile?.nickname ?? 'They'} has been consistently engaged over the past ${range} days. No significant changes detected.`;
-    if (talkedDays >= range * 0.6) return `${profile?.nickname ?? 'They'} has been mostly engaged with a few quieter days.`;
+    if (talkedDays >= range * 0.85)
+      return `${profile?.nickname ?? 'They'} has been consistently engaged over the past ${range} days. No significant changes detected.`;
+    if (talkedDays >= range * 0.6)
+      return `${profile?.nickname ?? 'They'} has been mostly engaged with a few quieter days.`;
     return `${profile?.nickname ?? 'They'} has missed several sessions recently. Consider checking in.`;
   })();
 
-  // Notable events
   const notable: { date: string; note: string }[] = [];
   let missStreak = 0;
   for (const d of trend) {
@@ -39,16 +41,32 @@ export default function TrendScreen() {
       missStreak++;
       if (missStreak === 2) notable.push({ date: d.date, note: `Missed ${missStreak} sessions in a row` });
     } else {
-      if (d.status === 'yellow') notable.push({ date: d.date, note: 'Alert: reduced engagement' });
+      if (d.status === 'yellow') notable.push({ date: d.date, note: 'Worth checking — quieter than usual' });
       missStreak = 0;
     }
   }
 
   const CHART_HEIGHT = 120;
-  const barW = Math.max(3, (SCREEN_WIDTH - 40) / trend.length - 2);
+  const barW = Math.max(3, (SCREEN_WIDTH - 56) / trend.length - 2);
+
+  function barColor(d: TrendDay): string {
+    if (d.missed) return '#E8E0D6';
+    if (d.status === 'yellow') return '#C5AA80';
+    if (d.status === 'red') return '#C09898';
+    return '#B9AA99';
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Header */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Feather name="arrow-left" size={20} color="#2B2522" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>30-day trend</Text>
+        <View style={{ width: 28 }} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.content}>
         {/* Range Toggle */}
         <View style={styles.rangeRow}>
@@ -65,25 +83,22 @@ export default function TrendScreen() {
           ))}
         </View>
 
-        {/* Summary sentence */}
-        <View style={styles.summaryCard}>
+        {/* Summary */}
+        <View style={styles.card}>
           <Text style={styles.summaryText}>{summaryText}</Text>
           <Text style={styles.summaryStats}>
-            Talked {talkedDays}/{range} days · Avg {Math.floor(avgDuration / 60)}m {avgDuration % 60}s
+            Talked {talkedDays} of {range} days · Avg {Math.floor(avgDuration / 60)}m {avgDuration % 60}s
           </Text>
         </View>
 
         {/* Bar chart */}
-        <View style={styles.chartCard}>
+        <View style={styles.card}>
           <View style={[styles.chart, { height: CHART_HEIGHT }]}>
             {trend.map((d, i) => {
               const h = d.missed ? 3 : Math.max(6, (d.duration / maxDuration) * CHART_HEIGHT);
               return (
                 <View key={i} style={[styles.barWrap, { height: CHART_HEIGHT }]}>
-                  <View style={[
-                    styles.bar,
-                    { height: h, width: barW, backgroundColor: d.missed ? '#E0E0E0' : BAR_COLOR[d.status] },
-                  ]} />
+                  <View style={[styles.bar, { height: h, width: barW, backgroundColor: barColor(d) }]} />
                 </View>
               );
             })}
@@ -93,30 +108,31 @@ export default function TrendScreen() {
             <Text style={styles.chartLabel}>{trend[Math.floor(trend.length / 2)]?.date?.slice(5)}</Text>
             <Text style={styles.chartLabel}>{trend[trend.length - 1]?.date?.slice(5)}</Text>
           </View>
-          {/* Legend */}
           <View style={styles.legend}>
-            <LegendDot color="#2ECC71" label="Normal" />
-            <LegendDot color="#F1C40F" label="Quieter" />
-            <LegendDot color="#E74C3C" label="Missed" />
+            <LegendDot color="#B9AA99" label="Doing well" />
+            <LegendDot color="#C5AA80" label="Worth checking" />
+            <LegendDot color="#E8E0D6" label="Missed" />
           </View>
         </View>
 
         {/* Notable Events */}
         {notable.length > 0 && (
-          <View style={styles.notableCard}>
-            <Text style={styles.notableTitle}>Notable events</Text>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Notable events</Text>
             {notable.map((n, i) => (
-              <View key={i} style={styles.notableRow}>
-                <Text style={styles.notableDate}>{n.date}</Text>
+              <View key={i} style={[styles.notableRow, i < notable.length - 1 && styles.notableRowBorder]}>
+                <Text style={styles.notableDate}>{n.date.slice(5)}</Text>
                 <Text style={styles.notableNote}>{n.note}</Text>
               </View>
             ))}
           </View>
         )}
 
+        {/* V2 Note */}
         <View style={styles.v2Note}>
+          <Feather name="info" size={14} color="#B2844B" />
           <Text style={styles.v2NoteText}>
-            💡 Cognitive Stability Score (0–100 with trend arrow) coming in V2 after user validation.
+            Cognitive Stability Score with trend arrow is coming in a future update after user validation.
           </Text>
         </View>
       </ScrollView>
@@ -134,40 +150,82 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F9FC' },
-  content: { padding: 20, paddingBottom: 48 },
+  safe: { flex: 1, backgroundColor: '#F8F3EC' },
+
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: 16, fontWeight: '600', color: '#2B2522' },
+
+  content: { paddingHorizontal: 20, paddingBottom: 48 },
+
   rangeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  rangePill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F0F0F0' },
-  rangePillActive: { backgroundColor: '#1A6FA8' },
-  rangePillText: { fontSize: 13, color: '#555', fontWeight: '600' },
-  rangePillTextActive: { color: '#fff' },
-  summaryCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  rangePill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F4F0EA',
+    borderWidth: 1,
+    borderColor: '#E7DED2',
   },
-  summaryText: { fontSize: 15, color: '#333', lineHeight: 22 },
-  summaryStats: { fontSize: 13, color: '#888', marginTop: 8 },
-  chartCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  rangePillActive: { backgroundColor: '#87566A', borderColor: '#87566A' },
+  rangePillText: { fontSize: 13, color: '#756C64', fontWeight: '600' },
+  rangePillTextActive: { color: '#FFFFFF' },
+
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E7DED2',
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 2,
   },
+  summaryText: { fontSize: 14, color: '#756C64', lineHeight: 21 },
+  summaryStats: { fontSize: 13, color: '#A69C92', marginTop: 8 },
+
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 1 },
   barWrap: { justifyContent: 'flex-end' },
-  bar: { borderRadius: 2 },
-  chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  chartLabel: { fontSize: 11, color: '#AAA' },
-  legend: { flexDirection: 'row', gap: 16, marginTop: 12 },
+  bar: { borderRadius: 3 },
+  chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  chartLabel: { fontSize: 11, color: '#A69C92' },
+  legend: { flexDirection: 'row', gap: 16, marginTop: 14, flexWrap: 'wrap' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendLabel: { fontSize: 12, color: '#666' },
-  notableCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  legendDot: { width: 10, height: 10, borderRadius: 999 },
+  legendLabel: { fontSize: 12, color: '#756C64' },
+
+  cardTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#A69C92',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 10,
   },
-  notableTitle: { fontSize: 13, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-  notableRow: { flexDirection: 'row', gap: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  notableDate: { fontSize: 13, color: '#999', width: 60 },
-  notableNote: { fontSize: 13, color: '#444', flex: 1 },
-  v2Note: { backgroundColor: '#EEF6FC', borderRadius: 12, padding: 14 },
-  v2NoteText: { fontSize: 13, color: '#1A6FA8', lineHeight: 18 },
+  notableRow: { flexDirection: 'row', gap: 14, paddingVertical: 8 },
+  notableRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3EDE6' },
+  notableDate: { fontSize: 13, color: '#A69C92', width: 44 },
+  notableNote: { fontSize: 13, color: '#756C64', flex: 1 },
+
+  v2Note: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#F6EFE5',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E7DED2',
+  },
+  v2NoteText: { fontSize: 13, color: '#B2844B', lineHeight: 18, flex: 1 },
 });
