@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Switch, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import { MOCK_CAREGIVER, MOCK_ELDERLY } from '../../src/data/mockData';
 
 export default function SettingsScreen() {
@@ -22,7 +23,7 @@ export default function SettingsScreen() {
         <SettingRow label="Name" value={MOCK_CAREGIVER.name} />
         <SettingRow label="Email" value={MOCK_CAREGIVER.email} />
         <SettingRow label="Phone" value={MOCK_CAREGIVER.phone} />
-        <ActionRow label="Edit Account" onPress={() => Alert.alert('Edit Account', 'Account editing coming soon.')} />
+        <ActionRow label="Edit account" onPress={() => Alert.alert('Edit Account', 'Account editing coming soon.')} />
 
         {/* Notifications */}
         <SectionHeader title="Notifications" />
@@ -47,7 +48,7 @@ export default function SettingsScreen() {
           onSelect={v => setAlertLevel(v as 'all' | 'important' | 'urgent')}
         />
 
-        {/* Aria / Mirror */}
+        {/* Voice Companion */}
         <SectionHeader title="Voice Companion (Aria)" />
         {MOCK_ELDERLY.map(e => (
           <ActionRow
@@ -59,8 +60,8 @@ export default function SettingsScreen() {
         ))}
         <ActionRow label="Manage linked mirrors" onPress={() => Alert.alert('Mirrors', 'Mirror management coming soon.')} />
 
-        {/* Elderly Profiles */}
-        <SectionHeader title="Elderly Profiles" />
+        {/* Loved One Profiles */}
+        <SectionHeader title="Loved one profiles" />
         {MOCK_ELDERLY.map(e => (
           <ActionRow
             key={e.id}
@@ -69,7 +70,7 @@ export default function SettingsScreen() {
             onPress={() => Alert.alert('Edit Profile', `Edit profile for ${e.nickname}. (Coming soon)`)}
           />
         ))}
-        <ActionRow label="Add new elderly profile" onPress={() => router.push('/onboarding')} />
+        <ActionRow label="Add a loved one" onPress={() => router.push('/onboarding')} />
 
         {/* Privacy */}
         <SectionHeader title="Privacy & Data" />
@@ -80,13 +81,32 @@ export default function SettingsScreen() {
         <SectionHeader title="Support" />
         <ActionRow label="FAQ & Guide" onPress={() => router.push('/faq')} />
         <ActionRow label="Chat with support" onPress={() => router.push('/chatbot')} />
+        <ActionRow
+          label="Give feedback"
+          onPress={() =>
+            Alert.alert(
+              'Give Feedback',
+              'How is Reflexion working for you?',
+              [
+                { text: 'Not helpful', style: 'destructive' },
+                { text: 'Could be better', style: 'cancel' },
+                { text: 'Really helpful!', onPress: () => Alert.alert('Thank you', 'Your feedback means a lot to us.') },
+              ],
+            )
+          }
+        />
         <ActionRow label="Subscription & Billing" onPress={() => Alert.alert('Billing', 'Billing portal coming soon.')} />
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={() => Alert.alert('Log out', 'Log out of Reflexion?', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Log out', style: 'destructive', onPress: () => {} },
-        ])}>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={() =>
+            Alert.alert('Log out', 'Log out of Reflexion?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Log out', style: 'destructive', onPress: () => {} },
+            ])
+          }
+        >
           <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -113,7 +133,7 @@ function ActionRow({ label, value, onPress }: { label: string; value?: string; o
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.rowRight}>
         {value && <Text style={styles.rowValue}>{value}</Text>}
-        <Text style={styles.chevron}>›</Text>
+        <Feather name="chevron-right" size={16} color="#C4B9AF" />
       </View>
     </TouchableOpacity>
   );
@@ -123,7 +143,7 @@ function SwitchRow({ label, value, onChange }: { label: string; value: boolean; 
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: '#1A6FA8' }} />
+      <Switch value={value} onValueChange={onChange} trackColor={{ false: '#D8CFC3', true: '#87566A' }} thumbColor="#FFFFFF" />
     </View>
   );
 }
@@ -153,38 +173,64 @@ function PickerRow({ label, options, selected, onSelect }: {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F9FC' },
+  safe: { flex: 1, backgroundColor: '#F8F3EC' },
   scroll: { flex: 1 },
   content: { paddingBottom: 60 },
-  pageTitle: { fontSize: 26, fontWeight: '800', color: '#1A1A2E', padding: 20, paddingBottom: 8 },
+  pageTitle: { fontSize: 26, fontWeight: '500', color: '#2B2522', padding: 20, paddingBottom: 8, fontFamily: 'Georgia' },
+
   sectionHeader: {
-    fontSize: 12, fontWeight: '700', color: '#888', textTransform: 'uppercase',
-    letterSpacing: 0.8, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#A69C92',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    paddingBottom: 8,
   },
   row: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3EDE6',
   },
-  rowLabel: { fontSize: 15, color: '#1A1A2E' },
-  rowValue: { fontSize: 15, color: '#888' },
+  rowLabel: { fontSize: 15, color: '#2B2522' },
+  rowValue: { fontSize: 15, color: '#A69C92' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chevron: { fontSize: 20, color: '#CCC' },
+
   pickerBlock: {
-    backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3EDE6',
   },
   pickerOptions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   pill: {
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-    backgroundColor: '#F0F0F0', borderWidth: 1, borderColor: '#E0E0E0',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: '#F4F0EA',
+    borderWidth: 1,
+    borderColor: '#E7DED2',
   },
-  pillActive: { backgroundColor: '#1A6FA8', borderColor: '#1A6FA8' },
-  pillText: { fontSize: 13, color: '#555' },
-  pillTextActive: { color: '#fff', fontWeight: '600' },
+  pillActive: { backgroundColor: '#87566A', borderColor: '#87566A' },
+  pillText: { fontSize: 13, color: '#756C64' },
+  pillTextActive: { color: '#FFFFFF', fontWeight: '600' },
+
   logoutBtn: {
-    margin: 20, marginTop: 32, padding: 16, backgroundColor: '#FFF',
-    borderRadius: 14, borderWidth: 1.5, borderColor: '#E74C3C', alignItems: 'center',
+    margin: 20,
+    marginTop: 36,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D8CFC3',
+    alignItems: 'center',
   },
-  logoutText: { color: '#E74C3C', fontSize: 16, fontWeight: '700' },
+  logoutText: { color: '#87566A', fontSize: 15, fontWeight: '600' },
 });

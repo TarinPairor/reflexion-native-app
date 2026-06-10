@@ -1,12 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import type { TrendDay, Status } from '../data/mockData';
-
-const BAR_COLOR: Record<Status, string> = {
-  green: '#2ECC71',
-  yellow: '#F1C40F',
-  red: '#E74C3C',
-};
+import type { TrendDay } from '../data/mockData';
 
 interface Props {
   data: TrendDay[];
@@ -27,10 +21,7 @@ export default function MiniSparkline({ data, days = 7, height = 32 }: Props) {
             <View
               style={[
                 styles.bar,
-                {
-                  height: barH,
-                  backgroundColor: day.missed ? '#EAEAEA' : BAR_COLOR[day.status],
-                },
+                { height: barH, backgroundColor: day.missed ? '#E8E0D6' : '#B9AA99' },
               ]}
             />
           </View>
@@ -44,8 +35,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 3,
   },
   barWrapper: { flex: 1, justifyContent: 'flex-end' },
-  bar: { borderRadius: 2, width: '100%' },
+  bar: { borderRadius: 3, width: '100%' },
 });

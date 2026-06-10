@@ -20,9 +20,9 @@ export interface Session {
   elderlyId: string;
   date: string;
   time: string;
-  duration: number; // seconds
+  duration: number;
   wordCount: number;
-  responseLatency: number; // seconds
+  responseLatency: number;
   exchanges: number;
   status: Status;
   summary: string;
@@ -199,17 +199,21 @@ export function getElderlyStatus(elderlyId: string): Status {
 
 export function getStatusLabel(status: Status): string {
   if (status === 'green') return 'Doing well';
-  if (status === 'yellow') return 'Quieter this week';
-  return 'No interaction today';
+  if (status === 'yellow') return 'Worth checking';
+  return 'Needs attention';
 }
 
 export function getLastSeen(elderlyId: string): string {
   const map: Record<string, string> = {
-    'el-001': 'Today, 8:15am',
-    'el-002': 'Yesterday, 7:52am',
-    'el-003': '2 days ago',
+    'el-001': 'Last spoke today, 8:15am',
+    'el-002': 'Last spoke yesterday, 7:52am',
+    'el-003': 'No interaction for 2 days',
   };
   return map[elderlyId] ?? 'Unknown';
+}
+
+export function getInitials(nickname: string): string {
+  return nickname.split(' ').map(w => w[0]).join('').toUpperCase();
 }
 
 export function getLatestSession(elderlyId: string): Session | null {
@@ -223,8 +227,8 @@ export const MOCK_ALERTS: Alert[] = [
     elderlyId: 'el-003',
     elderlyName: 'Grandma Chan',
     type: 'no_interaction',
-    title: 'No interaction today',
-    message: "Grandma Chan hasn't interacted with Aria for 2 days. This is unusual for her — it may be worth checking in.",
+    title: 'No chat for 2 days',
+    message: "Grandma Chan has not interacted with Aria for 2 days. This is unusual for her. It may be worth checking in.",
     action: 'call',
     timestamp: '2026-06-09T10:30:00',
     read: false,
@@ -235,7 +239,7 @@ export const MOCK_ALERTS: Alert[] = [
     elderlyName: 'Grandpa Tan',
     type: 'reduced_engagement',
     title: 'Quieter than usual',
-    message: "Grandpa Tan's conversations have been noticeably shorter this week compared to his usual pattern.",
+    message: "Grandpa Tan has had shorter conversations this week compared to his usual pattern.",
     action: 'call',
     timestamp: '2026-06-08T09:15:00',
     read: false,
@@ -245,8 +249,8 @@ export const MOCK_ALERTS: Alert[] = [
     elderlyId: 'el-001',
     elderlyName: 'Grandma Lim',
     type: 'positive',
-    title: 'Great morning chat!',
-    message: "Grandma Lim had an unusually long and lively chat today — she talked about her upcoming market trip and her grandson visiting!",
+    title: 'Great morning chat',
+    message: "Grandma Lim had a cheerful and lively chat today. She mentioned her upcoming market trip and her grandson visiting!",
     action: 'none',
     timestamp: '2026-06-09T08:20:00',
     read: true,
@@ -291,8 +295,8 @@ export const FAQ_ITEMS = [
     a: 'No. Aria greets them automatically each morning at their usual wake time. They just need to talk back. There are no buttons to press and no apps to open.',
   },
   {
-    q: 'What does the Green/Yellow/Red status mean?',
-    a: 'Green means they had their usual conversation and everything looks normal. Yellow means the session was shorter or they seem a bit quieter than usual. Red means they have not had a conversation today or for several days.',
+    q: 'What does the status colour mean?',
+    a: 'Doing well means they had their usual conversation and everything looks normal. Worth checking means the session was shorter or they seem quieter than usual. Needs attention means they have not had a conversation for one or more days.',
   },
   {
     q: 'Will the conversation be stored?',
@@ -300,11 +304,11 @@ export const FAQ_ITEMS = [
   },
   {
     q: 'Can I adjust how fast Aria speaks?',
-    a: "Yes. Go to Settings → Elderly Profiles and adjust the speech rate per person. You can choose Slow, Normal, or Fast.",
+    a: "Yes. Go to Settings and adjust the speech rate per person. You can choose Slow, Normal, or Fast.",
   },
   {
     q: 'How do I link the mirror to the app?',
-    a: 'During onboarding, scan the QR code on the back of the Reflexion device. You can also do this later in Settings → Manage Mirrors.',
+    a: 'During onboarding, scan the QR code on the back of the Reflexion device. You can also do this later in Settings.',
   },
   {
     q: 'What languages does Aria speak?',
@@ -312,6 +316,6 @@ export const FAQ_ITEMS = [
   },
   {
     q: 'Can multiple caregivers monitor the same person?',
-    a: 'Not yet — this is planned for V2. Currently, one caregiver account is linked per elderly person.',
+    a: 'Not yet — this is planned for a future update. Currently, one caregiver account is linked per loved one.',
   },
 ];

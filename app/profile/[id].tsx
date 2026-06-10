@@ -3,12 +3,26 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import {
   MOCK_ELDERLY, MOCK_TRENDS, getElderlyStatus, getStatusLabel,
-  getLastSeen, getLatestSession,
+  getLastSeen, getLatestSession, getInitials,
 } from '../../src/data/mockData';
 import StatusBadge from '../../src/components/StatusBadge';
 import MiniSparkline from '../../src/components/MiniSparkline';
+import type { Status } from '../../src/data/mockData';
+
+const AVATAR_BG: Record<Status, string> = {
+  green: '#F0F3ED',
+  yellow: '#F6EFE5',
+  red: '#F3E8ED',
+};
+
+const AVATAR_TEXT: Record<Status, string> = {
+  green: '#4A5745',
+  yellow: '#7A5C30',
+  red: '#6B3D50',
+};
 
 export default function ProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,20 +48,38 @@ export default function ProfileScreen() {
     const prev7 = trend.slice(-14, -7);
     const curAvg = last7.reduce((s, d) => s + d.duration, 0) / 7;
     const prevAvg = prev7.reduce((s, d) => s + d.duration, 0) / 7;
-    if (curAvg > prevAvg * 1.1) return 'More engaged than last week';
-    if (curAvg < prevAvg * 0.9) return 'Less engaged this week';
+    if (curAvg > prevAvg * 1.1) return 'More engaged';
+    if (curAvg < prevAvg * 0.9) return 'Less engaged';
     return 'Stable';
   })();
 
+  const initials = getInitials(profile.nickname);
+
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Header */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Feather name="arrow-left" size={20} color="#2B2522" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{profile.nickname}</Text>
+        <TouchableOpacity style={styles.moreBtn}>
+          <Feather name="more-horizontal" size={20} color="#756C64" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Status Banner */}
+        {/* Profile Banner */}
         <View style={styles.banner}>
-          <StatusBadge status={status} label={getStatusLabel(status)} large />
-          <Text style={styles.bannerName}>{profile.nickname} is {getStatusLabel(status).toLowerCase()}</Text>
-          <Text style={styles.lastSeen}>Last spoke: {getLastSeen(id)}</Text>
-          {session && (
+          <View style={styles.bannerTop}>
+            <StatusBadge status={status} label={getStatusLabel(status)} />
+            <View style={[styles.avatar, { backgroundColor: AVATAR_BG[status] }]}>
+              <Text style={[styles.avatarText, { color: AVATAR_TEXT[status] }]}>{initials}</Text>
+            </View>
+          </View>
+          <Text style={styles.bannerName}>{profile.nickname}</Text>
+          <Text style={styles.lastSeen}>{getLastSeen(id)}</Text>
+          {session && session.duration > 0 && (
             <Text style={styles.duration}>
               Duration: {Math.floor(session.duration / 60)}m {session.duration % 60}s
             </Text>
@@ -56,7 +88,8 @@ export default function ProfileScreen() {
 
         {/* Call Button */}
         <TouchableOpacity style={styles.callBtn} onPress={() => Alert.alert('Call', `Calling ${profile.nickname}...`)}>
-          <Text style={styles.callBtnText}>📞  Call {profile.nickname}</Text>
+          <Feather name="phone" size={17} color="#FFFFFF" />
+          <Text style={styles.callBtnText}>Call {profile.nickname}</Text>
         </TouchableOpacity>
 
         {/* Today's Summary */}
@@ -68,7 +101,7 @@ export default function ProfileScreen() {
               <View style={styles.topicRow}>
                 {session.topics.map(t => (
                   <View key={t} style={styles.topicChip}>
-                    <Text style={styles.topicText}>{topicIcon(t)} {t}</Text>
+                    <Text style={styles.topicText}>{t}</Text>
                   </View>
                 ))}
               </View>
@@ -79,75 +112,147 @@ export default function ProfileScreen() {
         {/* This Week */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>This week</Text>
-          <MiniSparkline data={trend} days={7} height={48} />
-          <Text style={styles.weekStat}>Talked {talkedDays} of 7 days · Avg {Math.floor(avgDuration / 60)}m {avgDuration % 60}s</Text>
-          <View style={[styles.trendPill, trendLabel === 'Stable' ? styles.trendGreen : trendLabel.includes('More') ? styles.trendGreen : styles.trendYellow]}>
+          <MiniSparkline data={trend} days={7} height={52} />
+          <Text style={styles.weekStat}>
+            Talked {talkedDays} of 7 days · Avg {Math.floor(avgDuration / 60)}m {avgDuration % 60}s
+          </Text>
+          <View style={styles.trendPill}>
             <Text style={styles.trendText}>{trendLabel}</Text>
           </View>
         </View>
 
         {/* Quick Actions */}
         <View style={styles.actionGrid}>
-          <ActionCard icon="📋" label="Full session" onPress={() => session && router.push(`/session/${session.id}`)} />
-          <ActionCard icon="📅" label="30-day trend" onPress={() => router.push(`/trend/${id}`)} />
-          <ActionCard icon="⚙️" label="Alert settings" onPress={() => router.push('/(tabs)/settings')} />
+          <ActionCard icon="activity" label="Full session" onPress={() => session && router.push(`/session/${session.id}`)} />
+          <ActionCard icon="bar-chart-2" label="30-day trend" onPress={() => router.push(`/trend/${id}`)} />
+          <ActionCard icon="bell" label="Alert settings" onPress={() => router.push('/(tabs)/settings')} />
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function topicIcon(topic: string): string {
-  const map: Record<string, string> = {
-    Market: '🛒', Food: '🍜', Family: '👨‍👩‍👧', Weather: '🌤',
-    Travel: '✈️', Work: '💼', Health: '💊',
-  };
-  return map[topic] ?? '💬';
-}
-
-function ActionCard({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function ActionCard({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.75}>
-      <Text style={styles.actionIcon}>{icon}</Text>
+      <Feather name={icon} size={20} color="#87566A" />
       <Text style={styles.actionLabel}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F9FC' },
-  notFound: { padding: 30, fontSize: 16, color: '#888', textAlign: 'center' },
-  content: { padding: 20, paddingBottom: 48 },
+  safe: { flex: 1, backgroundColor: '#F8F3EC' },
+  notFound: { padding: 30, fontSize: 16, color: '#A69C92', textAlign: 'center' },
+
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: 16, fontWeight: '600', color: '#2B2522' },
+  moreBtn: { padding: 4 },
+
+  content: { paddingHorizontal: 20, paddingBottom: 48 },
+
   banner: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 16, alignItems: 'flex-start',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E7DED2',
+    padding: 20,
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  bannerName: { fontSize: 20, fontWeight: '800', color: '#1A1A2E', marginTop: 12 },
-  lastSeen: { fontSize: 14, color: '#777', marginTop: 4 },
-  duration: { fontSize: 13, color: '#999', marginTop: 2 },
+  bannerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontSize: 18, fontWeight: '500', fontFamily: 'Georgia' },
+  bannerName: { fontSize: 22, fontWeight: '500', color: '#2B2522', fontFamily: 'Georgia', marginBottom: 4 },
+  lastSeen: { fontSize: 14, color: '#756C64' },
+  duration: { fontSize: 13, color: '#A69C92', marginTop: 2 },
+
   callBtn: {
-    backgroundColor: '#1A6FA8', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#87566A',
+    borderRadius: 12,
+    paddingVertical: 15,
+    marginBottom: 14,
   },
-  callBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  callBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+
   card: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E7DED2',
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  cardTitle: { fontSize: 13, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-  summaryText: { fontSize: 15, color: '#333', lineHeight: 22 },
-  topicRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  topicChip: { backgroundColor: '#EEF6FC', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
-  topicText: { fontSize: 13, color: '#1A6FA8', fontWeight: '600' },
-  weekStat: { fontSize: 13, color: '#666', marginTop: 10 },
-  trendPill: { alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  trendGreen: { backgroundColor: '#E6F9F0' },
-  trendYellow: { backgroundColor: '#FFF8E1' },
-  trendText: { fontSize: 13, fontWeight: '600', color: '#555' },
-  actionGrid: { flexDirection: 'row', gap: 12 },
+  cardTitle: { fontSize: 13, fontWeight: '600', color: '#A69C92', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  summaryText: { fontSize: 14, color: '#756C64', lineHeight: 21 },
+  topicRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  topicChip: {
+    backgroundColor: '#F4F0EA',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E7DED2',
+  },
+  topicText: { fontSize: 12, color: '#756C64', fontWeight: '600' },
+  weekStat: { fontSize: 13, color: '#756C64', marginTop: 12 },
+  trendPill: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#F4F0EA',
+  },
+  trendText: { fontSize: 12, fontWeight: '600', color: '#66735D' },
+
+  actionGrid: { flexDirection: 'row', gap: 10 },
   actionCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, alignItems: 'center', gap: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E7DED2',
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  actionIcon: { fontSize: 26 },
-  actionLabel: { fontSize: 12, color: '#555', fontWeight: '600', textAlign: 'center' },
+  actionLabel: { fontSize: 12, color: '#756C64', fontWeight: '600', textAlign: 'center' },
 });
