@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity,
 } from 'react-native';
@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import ElderlyCard from '../../src/components/ElderlyCard';
 import { MOCK_ELDERLY, getElderlyStatus } from '../../src/data/mockData';
+import { getApiUrl } from '../apiUrl';
 
 const STATUS_DOT: Record<string, string> = {
   green: '#66735D',
@@ -13,14 +14,49 @@ const STATUS_DOT: Record<string, string> = {
   red: '#87566A',
 };
 
+type DashboardPatient = {
+  id: string;
+  name: string;
+  age: number;
+  mirrorName: string;
+  photoUrl?: string;
+};
+
 export default function HomeScreen() {
   const router = useRouter();
+  const [configuredPatients, setConfiguredPatients] = useState<DashboardPatient[]>([]);
   const today = new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const displayName = 'there';
 
-  const doingWell = MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'green').length;
-  const checkIn   = MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'yellow').length;
-  const attention = MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'red').length;
+  const doingWell = configuredPatients.length || MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'green').length;
+  const checkIn = configuredPatients.length ? 0 : MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'yellow').length;
+  const attention = configuredPatients.length ? 0 : MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'red').length;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLatestConfig = async () => {
+      try {
+        const response = await fetch(getApiUrl('/api/nurse-patient-config/latest'));
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Unable to load configured patients.');
+        }
+
+        if (isMounted) {
+          setConfiguredPatients(Array.isArray(body?.patients) ? body.patients : []);
+        }
+      } catch (err) {
+        console.error('[HomeScreen] load configured patients failed', err);
+      }
+    };
+
+    void loadLatestConfig();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -47,14 +83,37 @@ export default function HomeScreen() {
 
         {/* Loved One Cards */}
         <Text style={styles.sectionTitle}>Your loved ones</Text>
-        {MOCK_ELDERLY.map(profile => (
-          <ElderlyCard
-            key={profile.id}
-            profile={profile}
-            status={getElderlyStatus(profile.id)}
-            onPress={() => router.push(`/profile/${profile.id}`)}
-          />
-        ))}
+        {configuredPatients.length ? (
+          configuredPatients.map((patient) => (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              key={patient.id}
+              style={styles.patientCard}
+            >
+              <View style={styles.patientAvatar}>
+                <Text style={styles.patientAvatarText}>
+                  {patient.name.slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.patientInfo}>
+                <Text style={styles.patientName}>{patient.name}</Text>
+                <Text style={styles.patientMeta}>
+                  Age {patient.age} • {patient.mirrorName}
+                </Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </TouchableOpacity>
+          ))
+        ) : (
+          MOCK_ELDERLY.map(profile => (
+            <ElderlyCard
+              key={profile.id}
+              profile={profile}
+              status={getElderlyStatus(profile.id)}
+              onPress={() => router.push(`/profile/${profile.id}`)}
+            />
+          ))
+        )}
 
         {/* Quick Links */}
         <Text style={styles.sectionTitle}>Quick links</Text>
@@ -175,6 +234,7 @@ const styles = StyleSheet.create({
   },
   patientInfo: { flex: 1 },
   patientName: { color: '#2B2522', fontSize: 16, fontWeight: '600' },
+  patientMeta: { color: '#756C64', fontSize: 12, marginTop: 3 },
   chevron: { fontSize: 20, color: '#C4B9AF', fontWeight: '300' },
 
   quickGrid: { flexDirection: 'row', gap: 12 },
