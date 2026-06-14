@@ -21,6 +21,7 @@
       "package": "com.tarinpairor.reflexionapp"
     },
     "web": {
+      "output": "server",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [

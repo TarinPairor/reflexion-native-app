@@ -5,7 +5,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import ElderlyCard from '../../src/components/ElderlyCard';
-import { MOCK_ELDERLY, MOCK_CAREGIVER, getElderlyStatus } from '../../src/data/mockData';
+import { MOCK_ELDERLY, getElderlyStatus } from '../../src/data/mockData';
 
 const STATUS_DOT: Record<string, string> = {
   green: '#66735D',
@@ -16,6 +16,7 @@ const STATUS_DOT: Record<string, string> = {
 export default function HomeScreen() {
   const router = useRouter();
   const today = new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const displayName = 'there';
 
   const doingWell = MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'green').length;
   const checkIn   = MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'yellow').length;
@@ -27,7 +28,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Good morning, {MOCK_CAREGIVER.name.split(' ')[0]}</Text>
+            <Text style={styles.greeting}>Good morning, {displayName}</Text>
             <Text style={styles.date}>{today}</Text>
           </View>
           <TouchableOpacity onPress={() => router.push('/onboarding')} style={styles.addBtn}>
@@ -140,6 +141,41 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     marginTop: 4,
   },
+  patientCard: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E7DED2',
+    borderLeftColor: '#66735D',
+    borderLeftWidth: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+    padding: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  patientAvatar: {
+    alignItems: 'center',
+    backgroundColor: '#F0F3ED',
+    borderRadius: 999,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  patientAvatarText: {
+    color: '#4A5745',
+    fontFamily: 'Georgia',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  patientInfo: { flex: 1 },
+  patientName: { color: '#2B2522', fontSize: 16, fontWeight: '600' },
+  chevron: { fontSize: 20, color: '#C4B9AF', fontWeight: '300' },
 
   quickGrid: { flexDirection: 'row', gap: 12 },
   quickLink: {

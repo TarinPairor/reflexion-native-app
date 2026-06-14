@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { MOCK_CAREGIVER, MOCK_ELDERLY } from '../../src/data/mockData';
+import { MOCK_ELDERLY } from '../../src/data/mockData';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -16,14 +16,15 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.pageTitle}>Settings</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.pageTitle}>Settings</Text>
+        </View>
 
         {/* Account */}
         <SectionHeader title="Account" />
-        <SettingRow label="Name" value={MOCK_CAREGIVER.name} />
-        <SettingRow label="Email" value={MOCK_CAREGIVER.email} />
-        <SettingRow label="Phone" value={MOCK_CAREGIVER.phone} />
-        <ActionRow label="Edit account" onPress={() => Alert.alert('Edit Account', 'Account editing coming soon.')} />
+        {ACCOUNT_ROWS.map((row) => (
+          <SettingRow key={row.label} label={row.label} value={row.value} />
+        ))}
 
         {/* Notifications */}
         <SectionHeader title="Notifications" />
@@ -97,22 +98,16 @@ export default function SettingsScreen() {
         />
         <ActionRow label="Subscription & Billing" onPress={() => Alert.alert('Billing', 'Billing portal coming soon.')} />
 
-        {/* Logout */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() =>
-            Alert.alert('Log out', 'Log out of Reflexion?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Log out', style: 'destructive', onPress: () => {} },
-            ])
-          }
-        >
-          <Text style={styles.logoutText}>Log out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const ACCOUNT_ROWS = [
+  { label: 'Name', value: 'Local user' },
+  { label: 'Email', value: 'Not connected' },
+  { label: 'Phone', value: 'Not connected' },
+];
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
@@ -176,7 +171,16 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8F3EC' },
   scroll: { flex: 1 },
   content: { paddingBottom: 60 },
-  pageTitle: { fontSize: 26, fontWeight: '500', color: '#2B2522', padding: 20, paddingBottom: 8, fontFamily: 'Georgia' },
+  titleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  pageTitle: { fontSize: 26, fontWeight: '500', color: '#2B2522', fontFamily: 'Georgia' },
 
   sectionHeader: {
     fontSize: 12,
