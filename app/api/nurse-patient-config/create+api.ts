@@ -106,6 +106,7 @@ export const POST: RequestHandler = async (request) => {
         keyTopicsOtherText: patient.keyTopicsOtherText?.trim() || undefined,
         mirrorId,
         mirrorName: patient.mirrorName?.trim() || `Mirror ${index + 1}`,
+        mirrorVerified: false,
       };
     }),
     createdAt: now,
