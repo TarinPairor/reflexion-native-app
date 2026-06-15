@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView,
 } from 'react-native';
@@ -11,6 +11,7 @@ import {
 import StatusBadge from '../../src/components/StatusBadge';
 import MiniSparkline from '../../src/components/MiniSparkline';
 import type { Status } from '../../src/data/mockData';
+import { getApiUrl } from '../apiUrl';
 
 const AVATAR_BG: Record<Status, string> = {
   green: '#F0F3ED',
@@ -24,16 +25,212 @@ const AVATAR_TEXT: Record<Status, string> = {
   red: '#6B3D50',
 };
 
+type RealPatientProfile = {
+  id: string;
+  name: string;
+  age: number | null;
+  gender: string;
+  preferredLanguage: string;
+  usualWakeTime: string;
+  photoUrl: string;
+  mirrorId: string;
+  mirrorName: string;
+  mirrorVerified: boolean;
+  keyTopics: string[];
+};
+
+type LatestConversation = {
+  id: string;
+  duration: number;
+  words: number;
+  exchanges: number;
+  avgLatency: number;
+  createdAt: string | null;
+};
+
+type RealTrendDay = {
+  date: string;
+  duration: number;
+  status: Status;
+  missed: boolean;
+};
+
 export default function ProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const [realProfile, setRealProfile] = useState<RealPatientProfile | null>(null);
+  const [latestConversation, setLatestConversation] = useState<LatestConversation | null>(null);
+  const [realTrend, setRealTrend] = useState<RealTrendDay[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedRealProfile, setHasLoadedRealProfile] = useState(false);
   const profile = MOCK_ELDERLY.find(e => e.id === id);
+  const shouldLoadRealProfile = Boolean(id && !id.startsWith('el-'));
+  const goBackOrHome = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
 
-  if (!profile) return (
+    router.replace('/(tabs)');
+  };
+
+  useEffect(() => {
+    if (!shouldLoadRealProfile) {
+      return;
+    }
+
+    let isMounted = true;
+    const loadProfile = async () => {
+      setIsLoading(true);
+      setHasLoadedRealProfile(false);
+      try {
+        const response = await fetch(getApiUrl(`/api/patient-profile?id=${encodeURIComponent(id)}`));
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Unable to load profile.');
+        }
+
+        if (isMounted) {
+          setRealProfile(body.patient || null);
+          setLatestConversation(body.latestConversation || null);
+        }
+      } catch (err) {
+        console.error('[ProfileScreen] load patient profile failed', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setHasLoadedRealProfile(true);
+        }
+      }
+    };
+
+    void loadProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, shouldLoadRealProfile]);
+
+  useEffect(() => {
+    if (!shouldLoadRealProfile) {
+      return;
+    }
+
+    let isMounted = true;
+    const loadTrend = async () => {
+      try {
+        const response = await fetch(getApiUrl(`/api/patient-trend?id=${encodeURIComponent(id)}&days=7`));
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Unable to load patient trend.');
+        }
+
+        if (isMounted) {
+          setRealTrend(Array.isArray(body?.trend) ? body.trend : []);
+        }
+      } catch (err) {
+        console.error('[ProfileScreen] load patient trend failed', err);
+      }
+    };
+
+    void loadTrend();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, shouldLoadRealProfile]);
+
+  const realInitials = useMemo(
+    () => (realProfile ? getNameInitials(realProfile.name) : ''),
+    [realProfile],
+  );
+
+  if (!profile && !realProfile && (isLoading || (shouldLoadRealProfile && !hasLoadedRealProfile))) return (
+    <SafeAreaView style={styles.safe}>
+      <Text style={styles.notFound}>Loading profile...</Text>
+    </SafeAreaView>
+  );
+
+  if (!profile && !realProfile) return (
     <SafeAreaView style={styles.safe}>
       <Text style={styles.notFound}>Profile not found.</Text>
     </SafeAreaView>
   );
+
+  if (realProfile) {
+    const latestSpokenText = formatLastSpoken(latestConversation?.createdAt || null);
+    const durationText = formatDuration(latestConversation?.duration || 0);
+    const talkedDays = realTrend.filter((day) => !day.missed).length;
+    const avgDuration = talkedDays
+      ? Math.round(realTrend.filter((day) => !day.missed).reduce((sum, day) => sum + day.duration, 0) / talkedDays)
+      : 0;
+
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity onPress={goBackOrHome} style={styles.backBtn}>
+            <Feather name="arrow-left" size={20} color="#2B2522" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{realProfile.name}</Text>
+          <TouchableOpacity style={styles.moreBtn}>
+            <Feather name="more-horizontal" size={20} color="#756C64" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.banner}>
+            <View style={styles.bannerTop}>
+              <StatusBadge status="green" label="Doing well" />
+              <View style={[styles.avatar, { backgroundColor: AVATAR_BG.green }]}>
+                <Text style={[styles.avatarText, { color: AVATAR_TEXT.green }]}>{realInitials}</Text>
+              </View>
+            </View>
+            <Text style={styles.bannerName}>{realProfile.name}</Text>
+            <Text style={styles.lastSeen}>{latestSpokenText}</Text>
+            <Text style={styles.duration}>Duration: {durationText}</Text>
+          </View>
+
+          <TouchableOpacity style={styles.callBtn} onPress={() => Alert.alert('Call', `Calling ${realProfile.name}...`)}>
+            <Feather name="phone" size={17} color="#FFFFFF" />
+            <Text style={styles.callBtnText}>Call {realProfile.name}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Today's summary</Text>
+            <Text style={styles.emptyText}>No summary yet.</Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>This week</Text>
+            {realTrend.length > 0 ? (
+              <>
+                <MiniSparkline data={realTrend} days={7} height={52} />
+                <Text style={styles.weekStat}>
+                  Talked {talkedDays} of 7 days · Avg {formatDuration(avgDuration)}
+                </Text>
+              </>
+            ) : (
+              <View style={styles.emptyChart} />
+            )}
+          </View>
+
+          <View style={styles.actionGrid}>
+            <ActionCard icon="activity" label="Full session" onPress={() => latestConversation?.id && router.push(`/session/${latestConversation.id}`)} />
+            <ActionCard icon="bar-chart-2" label="30-day trend" onPress={() => router.push(`/trend/${id}`)} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  const mockProfile = profile;
+  if (!mockProfile) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Text style={styles.notFound}>Profile not found.</Text>
+      </SafeAreaView>
+    );
+  }
 
   const status = getElderlyStatus(id);
   const session = getLatestSession(id);
@@ -53,16 +250,16 @@ export default function ProfileScreen() {
     return 'Stable';
   })();
 
-  const initials = getInitials(profile.nickname);
+  const initials = getInitials(mockProfile.nickname);
 
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.headerBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={goBackOrHome} style={styles.backBtn}>
           <Feather name="arrow-left" size={20} color="#2B2522" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{profile.nickname}</Text>
+        <Text style={styles.headerTitle}>{mockProfile.nickname}</Text>
         <TouchableOpacity style={styles.moreBtn}>
           <Feather name="more-horizontal" size={20} color="#756C64" />
         </TouchableOpacity>
@@ -77,7 +274,7 @@ export default function ProfileScreen() {
               <Text style={[styles.avatarText, { color: AVATAR_TEXT[status] }]}>{initials}</Text>
             </View>
           </View>
-          <Text style={styles.bannerName}>{profile.nickname}</Text>
+          <Text style={styles.bannerName}>{mockProfile.nickname}</Text>
           <Text style={styles.lastSeen}>{getLastSeen(id)}</Text>
           {session && session.duration > 0 && (
             <Text style={styles.duration}>
@@ -87,9 +284,9 @@ export default function ProfileScreen() {
         </View>
 
         {/* Call Button */}
-        <TouchableOpacity style={styles.callBtn} onPress={() => Alert.alert('Call', `Calling ${profile.nickname}...`)}>
+        <TouchableOpacity style={styles.callBtn} onPress={() => Alert.alert('Call', `Calling ${mockProfile.nickname}...`)}>
           <Feather name="phone" size={17} color="#FFFFFF" />
-          <Text style={styles.callBtnText}>Call {profile.nickname}</Text>
+          <Text style={styles.callBtnText}>Call {mockProfile.nickname}</Text>
         </TouchableOpacity>
 
         {/* Today's Summary */}
@@ -125,7 +322,6 @@ export default function ProfileScreen() {
         <View style={styles.actionGrid}>
           <ActionCard icon="activity" label="Full session" onPress={() => session && router.push(`/session/${session.id}`)} />
           <ActionCard icon="bar-chart-2" label="30-day trend" onPress={() => router.push(`/trend/${id}`)} />
-          <ActionCard icon="bell" label="Alert settings" onPress={() => router.push('/(tabs)/settings')} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -139,6 +335,39 @@ function ActionCard({ icon, label, onPress }: { icon: any; label: string; onPres
       <Text style={styles.actionLabel}>{label}</Text>
     </TouchableOpacity>
   );
+}
+
+function getNameInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || '?';
+}
+
+function formatDuration(seconds: number) {
+  if (!seconds) {
+    return '0m 0s';
+  }
+
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function formatLastSpoken(value: string | null) {
+  if (!value) {
+    return 'Last spoken: no conversation yet';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Last spoken: unavailable';
+  }
+
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString('en-SG', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  return `Last spoke ${isToday ? 'today' : date.toLocaleDateString('en-SG')}, ${time}`;
 }
 
 const styles = StyleSheet.create({
@@ -217,6 +446,12 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 13, fontWeight: '600', color: '#A69C92', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
   summaryText: { fontSize: 14, color: '#756C64', lineHeight: 21 },
+  emptyText: { fontSize: 14, color: '#A69C92', lineHeight: 21 },
+  emptyChart: {
+    backgroundColor: '#F4F0EA',
+    borderRadius: 8,
+    height: 52,
+  },
   topicRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   topicChip: {
     backgroundColor: '#F4F0EA',

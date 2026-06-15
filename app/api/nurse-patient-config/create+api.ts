@@ -20,6 +20,7 @@ const { pbkdf2Sync, randomBytes } = require('crypto');
 
 const DB_NAME = 'ref';
 const COLLECTION_NAME = 'NursePatientConfig';
+const MIRROR_MAP_COLLECTION_NAME = 'MirrorIdToNurseIdMap';
 
 const RELATIONSHIPS = ['child', 'sibling', 'spouse', 'other'] as const;
 const GENDERS = ['male', 'female', 'other'] as const;
@@ -82,7 +83,9 @@ export const POST: RequestHandler = async (request) => {
   const notifications = body.notifications as Required<NotificationsBody>;
   const patients = body.patients as PatientBody[];
 
+  const nurseId = new ObjectId();
   const document = {
+    _id: nurseId,
     name: account.name.trim(),
     email: account.email.trim().toLowerCase(),
     passwordHash: hashPassword(account.password),
@@ -117,13 +120,24 @@ export const POST: RequestHandler = async (request) => {
   await client.connect();
 
   try {
-    const result = await client
-      .db(DB_NAME)
-      .collection(COLLECTION_NAME)
-      .insertOne(document);
+    const db = client.db(DB_NAME);
+    const result = await db.collection(COLLECTION_NAME).insertOne(document);
+
+    await db.collection(MIRROR_MAP_COLLECTION_NAME).insertMany(
+      document.patients.map((patient) => ({
+        mirrorId: patient.mirrorId,
+        nurseId,
+        patientId: patient._id,
+        mirrorName: patient.mirrorName,
+        patientName: patient.name,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
 
     return Response.json({
       insertedId: result.insertedId.toHexString(),
+      mirrorMapCount: document.patients.length,
       patientCount: document.patients.length,
     });
   } finally {

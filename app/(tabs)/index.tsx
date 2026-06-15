@@ -25,8 +25,9 @@ type DashboardPatient = {
 export default function HomeScreen() {
   const router = useRouter();
   const [configuredPatients, setConfiguredPatients] = useState<DashboardPatient[]>([]);
+  const [caregiverName, setCaregiverName] = useState('');
   const today = new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const displayName = 'there';
+  const displayName = getFirstName(caregiverName) || 'there';
 
   const doingWell = configuredPatients.length || MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'green').length;
   const checkIn = configuredPatients.length ? 0 : MOCK_ELDERLY.filter(e => getElderlyStatus(e.id) === 'yellow').length;
@@ -46,6 +47,7 @@ export default function HomeScreen() {
 
         if (isMounted) {
           setConfiguredPatients(Array.isArray(body?.patients) ? body.patients : []);
+          setCaregiverName(typeof body?.caregiverName === 'string' ? body.caregiverName : '');
         }
       } catch (err) {
         console.error('[HomeScreen] load configured patients failed', err);
@@ -88,6 +90,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               activeOpacity={0.8}
               key={patient.id}
+              onPress={() => router.push(`/profile/${patient.id}`)}
               style={styles.patientCard}
             >
               <View style={styles.patientAvatar}>
@@ -124,6 +127,10 @@ export default function HomeScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function getFirstName(name: string) {
+  return name.trim().split(/\s+/)[0] || '';
 }
 
 function SummaryChip({ dot, count, label }: { dot: string; count: number; label: string }) {

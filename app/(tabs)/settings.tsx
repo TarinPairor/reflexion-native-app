@@ -1,17 +1,136 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Switch, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { MOCK_ELDERLY } from '../../src/data/mockData';
+import { getApiUrl } from '../apiUrl';
+
+type AlertSensitivity =
+  | 'notify_me_about_everything'
+  | 'only_important_changes'
+  | 'only_urgent_alerts';
+type SummaryTime = '09:00' | '19:00';
+
+type SettingsPatient = {
+  id: string;
+  name: string;
+  preferredLanguage: string;
+  speechSpeed: string;
+};
+
+type SettingsConfig = {
+  nurseId: string;
+  caregiverName: string;
+  email: string;
+  phoneNumber: string;
+  pushNotificationsEnabled: boolean;
+  alertSensitivity: AlertSensitivity;
+  preferredDailySummaryTime: SummaryTime;
+  patients: SettingsPatient[];
+};
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [notifs, setNotifs] = useState(true);
-  const [summaryTime, setSummaryTime] = useState<'morning' | 'evening'>('morning');
-  const [alertLevel, setAlertLevel] = useState<'all' | 'important' | 'urgent'>('important');
-  const [storeSessions, setStoreSessions] = useState(true);
+  const [summaryTime, setSummaryTime] = useState<SummaryTime>('09:00');
+  const [alertLevel, setAlertLevel] = useState<AlertSensitivity>('only_important_changes');
+  const [config, setConfig] = useState<SettingsConfig | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSettings = async () => {
+      try {
+        const response = await fetch(getApiUrl('/api/nurse-patient-config/latest'));
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Unable to load settings.');
+        }
+
+        if (isMounted) {
+          setConfig({
+            nurseId: body?.nurseId || '',
+            caregiverName: body?.caregiverName || '',
+            email: body?.email || '',
+            phoneNumber: body?.phoneNumber || '',
+            pushNotificationsEnabled: Boolean(body?.pushNotificationsEnabled),
+            alertSensitivity: body?.alertSensitivity || 'only_important_changes',
+            preferredDailySummaryTime: body?.preferredDailySummaryTime || '09:00',
+            patients: Array.isArray(body?.patients) ? body.patients : [],
+          });
+          setNotifs(Boolean(body?.pushNotificationsEnabled));
+          setAlertLevel(body?.alertSensitivity || 'only_important_changes');
+          setSummaryTime(body?.preferredDailySummaryTime || '09:00');
+        }
+      } catch (err) {
+        console.error('[SettingsScreen] load settings failed', err);
+      }
+    };
+
+    void loadSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const accountRows = useMemo(
+    () => [
+      { label: 'Name', value: config?.caregiverName || 'Not connected' },
+      { label: 'Email', value: config?.email || 'Not connected' },
+      { label: 'Phone', value: config?.phoneNumber || 'Not connected' },
+    ],
+    [config],
+  );
+
+  async function saveNotificationChanges() {
+    if (isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(getApiUrl('/api/nurse-patient-config/notifications'), {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          nurseId: config?.nurseId || undefined,
+          pushNotificationsEnabled: notifs,
+          alertSensitivity: alertLevel,
+          preferredDailySummaryTime: summaryTime,
+        }),
+      });
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(body?.error || 'Unable to save notification settings.');
+      }
+
+      setConfig((current) =>
+        current
+          ? {
+              ...current,
+              pushNotificationsEnabled: body.pushNotificationsEnabled,
+              alertSensitivity: body.alertSensitivity,
+              preferredDailySummaryTime: body.preferredDailySummaryTime,
+            }
+          : current,
+      );
+      Alert.alert('Saved', 'Notification settings updated.');
+    } catch (err) {
+      Alert.alert(
+        'Unable to save',
+        err instanceof Error ? err.message : 'Unable to save notification settings.',
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -22,7 +141,7 @@ export default function SettingsScreen() {
 
         {/* Account */}
         <SectionHeader title="Account" />
-        {ACCOUNT_ROWS.map((row) => (
+        {accountRows.map((row) => (
           <SettingRow key={row.label} label={row.label} value={row.value} />
         ))}
 
@@ -32,50 +151,61 @@ export default function SettingsScreen() {
         <PickerRow
           label="Daily summary"
           options={[
-            { value: 'morning', label: 'Morning (9am)' },
-            { value: 'evening', label: 'Evening (7pm)' },
+            { value: '09:00', label: 'Morning (9am)' },
+            { value: '19:00', label: 'Evening (7pm)' },
           ]}
           selected={summaryTime}
-          onSelect={v => setSummaryTime(v as 'morning' | 'evening')}
+          onSelect={v => setSummaryTime(v as SummaryTime)}
         />
         <PickerRow
           label="Alert sensitivity"
           options={[
-            { value: 'all', label: 'All changes' },
-            { value: 'important', label: 'Important only' },
-            { value: 'urgent', label: 'Urgent only' },
+            { value: 'notify_me_about_everything', label: 'Notify me about everything' },
+            { value: 'only_important_changes', label: 'Only important changes' },
+            { value: 'only_urgent_alerts', label: 'Only urgent alerts' },
           ]}
           selected={alertLevel}
-          onSelect={v => setAlertLevel(v as 'all' | 'important' | 'urgent')}
+          onSelect={v => setAlertLevel(v as AlertSensitivity)}
         />
+        <TouchableOpacity
+          disabled={isSaving}
+          onPress={saveNotificationChanges}
+          style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
+        >
+          {isSaving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save changes</Text>
+          )}
+        </TouchableOpacity>
 
         {/* Voice Companion */}
         <SectionHeader title="Voice Companion (Aria)" />
-        {MOCK_ELDERLY.map(e => (
+        {(config?.patients || []).map(patient => (
           <ActionRow
-            key={e.id}
-            label={`${e.nickname} — Speech speed`}
-            value="Slow"
-            onPress={() => Alert.alert('Speech Speed', `Adjust Aria's speed for ${e.nickname}. (Coming soon)`)}
+            key={patient.id}
+            label={`${patient.name} - Speech speed`}
+            value={patient.speechSpeed || 'Slow'}
+            onPress={() => Alert.alert('Speech Speed', `Adjust Aria's speed for ${patient.name}. (Coming soon)`)}
           />
         ))}
         <ActionRow label="Manage linked mirrors" onPress={() => Alert.alert('Mirrors', 'Mirror management coming soon.')} />
 
         {/* Loved One Profiles */}
         <SectionHeader title="Loved one profiles" />
-        {MOCK_ELDERLY.map(e => (
+        {(config?.patients || []).map(patient => (
           <ActionRow
-            key={e.id}
-            label={e.nickname}
-            value={e.language}
-            onPress={() => Alert.alert('Edit Profile', `Edit profile for ${e.nickname}. (Coming soon)`)}
+            key={patient.id}
+            label={patient.name}
+            value={formatLanguage(patient.preferredLanguage)}
+            onPress={() => Alert.alert('Edit Profile', `Edit profile for ${patient.name}. (Coming soon)`)}
           />
         ))}
         <ActionRow label="Add a loved one" onPress={() => router.push('/onboarding')} />
 
         {/* Privacy */}
         <SectionHeader title="Privacy & Data" />
-        <SwitchRow label="Store session summaries" value={storeSessions} onChange={setStoreSessions} />
+        <SwitchRow label="Store session summaries" value={false} onChange={() => {}} disabled />
         <ActionRow label="Export my data" onPress={() => Alert.alert('Export', 'Data export coming in V2.')} />
 
         {/* Support */}
@@ -103,11 +233,10 @@ export default function SettingsScreen() {
   );
 }
 
-const ACCOUNT_ROWS = [
-  { label: 'Name', value: 'Local user' },
-  { label: 'Email', value: 'Not connected' },
-  { label: 'Phone', value: 'Not connected' },
-];
+function formatLanguage(value: string) {
+  if (!value) return '';
+  return value.slice(0, 1).toUpperCase() + value.slice(1);
+}
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
@@ -134,11 +263,27 @@ function ActionRow({ label, value, onPress }: { label: string; value?: string; o
   );
 }
 
-function SwitchRow({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function SwitchRow({
+  disabled = false,
+  label,
+  value,
+  onChange,
+}: {
+  disabled?: boolean;
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ false: '#D8CFC3', true: '#87566A' }} thumbColor="#FFFFFF" />
+      <Switch
+        disabled={disabled}
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: '#D8CFC3', true: '#87566A' }}
+        thumbColor="#FFFFFF"
+      />
     </View>
   );
 }
@@ -225,6 +370,23 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: '#87566A', borderColor: '#87566A' },
   pillText: { fontSize: 13, color: '#756C64' },
   pillTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  saveBtn: {
+    alignItems: 'center',
+    backgroundColor: '#87566A',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginTop: 14,
+    minHeight: 46,
+    borderRadius: 12,
+  },
+  saveBtnDisabled: {
+    opacity: 0.7,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 
   logoutBtn: {
     margin: 20,

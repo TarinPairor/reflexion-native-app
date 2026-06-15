@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert,
 } from 'react-native';
@@ -6,12 +6,161 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { MOCK_SESSIONS, MOCK_ELDERLY } from '../../src/data/mockData';
 import StatusBadge from '../../src/components/StatusBadge';
+import { getApiUrl } from '../apiUrl';
+
+type ConversationLog = {
+  sentence: string;
+  role: string;
+  words: number;
+  duration: number;
+  wordsPerSecond: number;
+};
+
+type RealConversationSession = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  duration: number;
+  words: number;
+  exchanges: number;
+  avgLatency: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+  logs: ConversationLog[];
+};
 
 export default function SessionReplayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const session = MOCK_SESSIONS.find(s => s.id === id);
+  const [realSession, setRealSession] = useState<RealConversationSession | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedRealSession, setHasLoadedRealSession] = useState(false);
   const [showTranscript, setShowTranscript] = useState(true);
+  const shouldLoadRealSession = Boolean(id && /^[0-9a-f]{24}$/i.test(id));
+  const realTranscript = useMemo(
+    () => buildTranscript(realSession?.logs || []),
+    [realSession?.logs],
+  );
+
+  useEffect(() => {
+    if (!shouldLoadRealSession) {
+      return;
+    }
+
+    let isMounted = true;
+    const loadSession = async () => {
+      setIsLoading(true);
+      setHasLoadedRealSession(false);
+      try {
+        const response = await fetch(getApiUrl(`/api/conversation-session?id=${encodeURIComponent(id)}`));
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Unable to load conversation.');
+        }
+
+        if (isMounted) {
+          setRealSession(body);
+        }
+      } catch (err) {
+        console.error('[SessionReplayScreen] load conversation failed', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setHasLoadedRealSession(true);
+        }
+      }
+    };
+
+    void loadSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, shouldLoadRealSession]);
+
+  if (!session && !realSession && (isLoading || (shouldLoadRealSession && !hasLoadedRealSession))) return (
+    <SafeAreaView style={styles.safe}>
+      <Text style={styles.notFound}>Loading session...</Text>
+    </SafeAreaView>
+  );
+
+  if (!session && !realSession) return (
+    <SafeAreaView style={styles.safe}>
+      <Text style={styles.notFound}>Session not found.</Text>
+    </SafeAreaView>
+  );
+
+  if (realSession) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Feather name="arrow-left" size={20} color="#2B2522" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Full session</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.card}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaName}>{realSession.patientName}</Text>
+              <StatusBadge status="green" label="Normal" />
+            </View>
+            <Text style={styles.metaDate}>{formatDateTime(realSession.createdAt)}</Text>
+            <View style={styles.statsRow}>
+              <StatChip icon="clock" label="Duration" value={formatDuration(realSession.duration)} />
+              <StatChip icon="message-circle" label="Words" value={String(realSession.words)} />
+              <StatChip icon="repeat" label="Exchanges" value={String(realSession.exchanges)} />
+              <StatChip icon="zap" label="Avg latency" value={`${realSession.avgLatency.toFixed(1)}s`} />
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>AI Summary</Text>
+            <Text style={styles.emptyText}>No summary yet.</Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Audio Recording</Text>
+            <TouchableOpacity
+              style={styles.playBtn}
+              onPress={() => Alert.alert('Audio', 'Audio playback will be connected later.')}
+            >
+              <Feather name="play" size={15} color="#FFFFFF" />
+              <Text style={styles.playBtnText}>Play recording</Text>
+            </TouchableOpacity>
+            <Text style={styles.audioNote}>Only your loved one's voice is recorded - Aria's responses are excluded.</Text>
+          </View>
+
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.transcriptHeader} onPress={() => setShowTranscript(v => !v)}>
+              <Text style={styles.cardTitle}>Full Transcript</Text>
+              <Feather name={showTranscript ? 'chevron-up' : 'chevron-down'} size={16} color="#87566A" />
+            </TouchableOpacity>
+
+            {showTranscript && realTranscript.length > 0 && (
+              <View style={styles.transcript}>
+                {realTranscript.map((line, i) => (
+                  <View key={i} style={[styles.line, line.speaker === 'Aria' ? styles.lineAria : styles.lineUser]}>
+                    <Text style={styles.lineLabel}>
+                      {line.speaker === 'Aria' ? 'Aria' : realSession.patientName}
+                    </Text>
+                    <Text style={styles.lineText}>{line.text}</Text>
+                    <Text style={styles.lineTime}>{formatSeconds(line.timestamp)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {showTranscript && realTranscript.length === 0 && (
+              <Text style={styles.emptyTranscript}>No transcript available for this session.</Text>
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   if (!session) return (
     <SafeAreaView style={styles.safe}>
@@ -122,6 +271,40 @@ function formatSeconds(s: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
+function formatDuration(seconds: number): string {
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return 'No date available';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'No date available';
+  }
+
+  return `${date.toLocaleDateString('en-CA')} · ${date.toLocaleTimeString('en-SG', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })}`;
+}
+
+function buildTranscript(logs: ConversationLog[]) {
+  let timestamp = 0;
+  return logs.map((log) => {
+    const line = {
+      speaker: log.role.toLowerCase() === 'ai' ? 'Aria' : 'Patient',
+      text: log.sentence,
+      timestamp: Math.round(timestamp),
+    };
+    timestamp += log.duration || 0;
+    return line;
+  });
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8F3EC' },
   notFound: { padding: 30, textAlign: 'center', color: '#A69C92', fontSize: 15 },
@@ -179,6 +362,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   summaryText: { fontSize: 14, color: '#756C64', lineHeight: 21 },
+  emptyText: { fontSize: 14, color: '#A69C92', lineHeight: 21 },
   topicRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   topicChip: {
     backgroundColor: '#F4F0EA',

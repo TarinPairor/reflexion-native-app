@@ -12,6 +12,8 @@ type StoredPatient = {
   _id?: { toHexString?: () => string };
   name?: string;
   age?: number;
+  preferredLanguage?: string;
+  speechSpeed?: string;
   mirrorName?: string;
   photoUrl?: string;
 };
@@ -29,17 +31,42 @@ export const GET: RequestHandler = async () => {
     const document = await client
       .db(DB_NAME)
       .collection(COLLECTION_NAME)
-      .findOne({}, { sort: { createdAt: -1 }, projection: { patients: 1 } });
+      .findOne(
+        {},
+        {
+          sort: { createdAt: -1 },
+          projection: {
+            alertSensitivity: 1,
+            email: 1,
+            name: 1,
+            patients: 1,
+            phoneNumber: 1,
+            preferredDailySummaryTime: 1,
+            pushNotificationsEnabled: 1,
+          },
+        },
+      );
 
     const patients = ((document?.patients || []) as StoredPatient[]).map((patient, index) => ({
       id: patient._id?.toHexString?.() || String(index),
       name: patient.name || `Person ${index + 1}`,
       age: patient.age || 0,
+      preferredLanguage: patient.preferredLanguage || '',
+      speechSpeed: patient.speechSpeed || 'Slow',
       mirrorName: patient.mirrorName || `Mirror ${index + 1}`,
       photoUrl: patient.photoUrl || '',
     }));
 
-    return Response.json({ patients });
+    return Response.json({
+      nurseId: document?._id?.toHexString?.() || '',
+      caregiverName: document?.name || '',
+      email: document?.email || '',
+      phoneNumber: document?.phoneNumber || '',
+      pushNotificationsEnabled: Boolean(document?.pushNotificationsEnabled),
+      alertSensitivity: document?.alertSensitivity || 'only_important_changes',
+      preferredDailySummaryTime: document?.preferredDailySummaryTime || '09:00',
+      patients,
+    });
   } finally {
     await client.close();
   }

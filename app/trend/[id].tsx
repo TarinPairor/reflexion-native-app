@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Dimensions,
 } from 'react-native';
@@ -6,19 +6,79 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { MOCK_ELDERLY, MOCK_TRENDS } from '../../src/data/mockData';
 import type { TrendDay } from '../../src/data/mockData';
+import { getApiUrl } from '../apiUrl';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 type Range = 7 | 30 | 90;
+type TrendCache = Record<string, TrendDay[]>;
 
 export default function TrendScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [range, setRange] = useState<Range>(30);
+  const [realTrend, setRealTrend] = useState<TrendDay[]>([]);
+  const [trendCache, setTrendCache] = useState<TrendCache>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const profile = MOCK_ELDERLY.find(e => e.id === id);
-  const allTrend = MOCK_TRENDS[id] ?? [];
-  const trend = allTrend.slice(-range);
+  const shouldLoadRealTrend = Boolean(id && /^[0-9a-f]{24}$/i.test(id));
+  const realRangeImplemented = range === 7 || range === 30;
+
+  useEffect(() => {
+    if (!shouldLoadRealTrend || !realRangeImplemented) {
+      setRealTrend([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const cacheKey = getTrendCacheKey(id, range);
+    const cachedTrend = trendCache[cacheKey];
+    if (cachedTrend) {
+      setRealTrend(cachedTrend);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadTrend = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(getApiUrl(`/api/patient-trend?id=${encodeURIComponent(id)}&days=${range}`));
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Unable to load patient trend.');
+        }
+
+        if (isMounted) {
+          const trend = Array.isArray(body?.trend) ? body.trend : [];
+          setRealTrend(trend);
+          setTrendCache((current) => ({
+            ...current,
+            [cacheKey]: trend,
+          }));
+        }
+      } catch (err) {
+        console.error('[TrendScreen] load patient trend failed', err);
+        if (isMounted) {
+          setRealTrend([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadTrend();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, range, realRangeImplemented, shouldLoadRealTrend, trendCache]);
+
+  const allTrend = shouldLoadRealTrend ? realTrend : MOCK_TRENDS[id] ?? [];
+  const trend = shouldLoadRealTrend ? realTrend : allTrend.slice(-range);
 
   const maxDuration = Math.max(...trend.map(d => d.duration), 1);
   const talkedDays = trend.filter(d => !d.missed).length;
@@ -27,6 +87,12 @@ export default function TrendScreen() {
     : 0;
 
   const summaryText = (() => {
+    if (shouldLoadRealTrend && range === 90) {
+      return '3-month trend is not available yet.';
+    }
+    if (isLoading) {
+      return 'Loading trend...';
+    }
     if (talkedDays >= range * 0.85)
       return `${profile?.nickname ?? 'They'} has been consistently engaged over the past ${range} days. No significant changes detected.`;
     if (talkedDays >= range * 0.6)
@@ -86,28 +152,40 @@ export default function TrendScreen() {
         {/* Summary */}
         <View style={styles.card}>
           <Text style={styles.summaryText}>{summaryText}</Text>
-          <Text style={styles.summaryStats}>
-            Talked {talkedDays} of {range} days · Avg {Math.floor(avgDuration / 60)}m {avgDuration % 60}s
-          </Text>
+          {range === 90 && shouldLoadRealTrend ? (
+            <Text style={styles.summaryStats}>Coming soon</Text>
+          ) : (
+            <Text style={styles.summaryStats}>
+              Talked {talkedDays} of {range} days · Avg {Math.floor(avgDuration / 60)}m {avgDuration % 60}s
+            </Text>
+          )}
         </View>
 
         {/* Bar chart */}
         <View style={styles.card}>
-          <View style={[styles.chart, { height: CHART_HEIGHT }]}>
-            {trend.map((d, i) => {
-              const h = d.missed ? 3 : Math.max(6, (d.duration / maxDuration) * CHART_HEIGHT);
-              return (
-                <View key={i} style={[styles.barWrap, { height: CHART_HEIGHT }]}>
-                  <View style={[styles.bar, { height: h, width: barW, backgroundColor: barColor(d) }]} />
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.chartLabels}>
-            <Text style={styles.chartLabel}>{trend[0]?.date?.slice(5)}</Text>
-            <Text style={styles.chartLabel}>{trend[Math.floor(trend.length / 2)]?.date?.slice(5)}</Text>
-            <Text style={styles.chartLabel}>{trend[trend.length - 1]?.date?.slice(5)}</Text>
-          </View>
+          {range === 90 && shouldLoadRealTrend ? (
+            <View style={[styles.emptyChart, { height: CHART_HEIGHT }]}>
+              <Text style={styles.emptyChartText}>3-month view coming soon</Text>
+            </View>
+          ) : (
+            <>
+              <View style={[styles.chart, { height: CHART_HEIGHT }]}>
+                {trend.map((d, i) => {
+                  const h = d.missed ? 3 : Math.max(6, (d.duration / maxDuration) * CHART_HEIGHT);
+                  return (
+                    <View key={i} style={[styles.barWrap, { height: CHART_HEIGHT }]}>
+                      <View style={[styles.bar, { height: h, width: barW, backgroundColor: barColor(d) }]} />
+                    </View>
+                  );
+                })}
+              </View>
+              <View style={styles.chartLabels}>
+                <Text style={styles.chartLabel}>{trend[0]?.date?.slice(5)}</Text>
+                <Text style={styles.chartLabel}>{trend[Math.floor(trend.length / 2)]?.date?.slice(5)}</Text>
+                <Text style={styles.chartLabel}>{trend[trend.length - 1]?.date?.slice(5)}</Text>
+              </View>
+            </>
+          )}
           <View style={styles.legend}>
             <LegendDot color="#B9AA99" label="Doing well" />
             <LegendDot color="#C5AA80" label="Worth checking" />
@@ -147,6 +225,22 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <Text style={styles.legendLabel}>{label}</Text>
     </View>
   );
+}
+
+function getTrendCacheKey(id: string, range: Range) {
+  return `${id}:${range}:${getSingaporeDateKey(new Date())}`;
+}
+
+function getSingaporeDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Singapore',
+    year: 'numeric',
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 const styles = StyleSheet.create({
@@ -195,6 +289,8 @@ const styles = StyleSheet.create({
   summaryStats: { fontSize: 13, color: '#A69C92', marginTop: 8 },
 
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 1 },
+  emptyChart: { alignItems: 'center', justifyContent: 'center' },
+  emptyChartText: { color: '#A69C92', fontSize: 13, fontWeight: '600' },
   barWrap: { justifyContent: 'flex-end' },
   bar: { borderRadius: 3 },
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
